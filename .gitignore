@@ -4,6 +4,10 @@ node_modules/
 # Environment files
 .env
 
+# Package files (optional, agar push nahi karna)
+package.json
+package-lock.json
+
 # Logs
 *.log
 
