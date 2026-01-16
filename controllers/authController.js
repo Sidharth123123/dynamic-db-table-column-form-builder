@@ -398,6 +398,102 @@ exports.pbjects = async (req, res) => {
 
 // File: controllers/columnController.js
 
+
+
+// exports.table = async (req, res) => {
+//   const {
+//     object_id,
+//     column_name,
+//     column_type,
+//     column_length,
+//     is_null_possible,
+//     default_value
+//   } = req.body;
+
+//   // 1️⃣ Basic
+//   if (!object_id || !column_name || !column_type) {
+//     return res.status(400).json({
+//       error: "object_id, column_name, and column_type are required",
+//     });
+//   }
+
+//   try {
+  
+//     const columnMetaExists = await db.query(
+//       `SELECT column_name 
+//        FROM columns 
+//        WHERE object_id = $1 AND LOWER(column_name) = LOWER($2)`,
+//       [object_id, column_name]
+//     );
+
+//     if (columnMetaExists.rows.length > 0) {
+//       return res.status(400).json({
+//         error: `Column '${column_name}' already exists in metadata for object ID ${object_id}`,
+//       });
+//     }
+//     const objRes = await db.query(
+//       `SELECT object_name FROM objects WHERE object_id = $1`,
+//       [object_id]
+//     );
+
+//     if (objRes.rows.length === 0) {
+//       return res.status(404).json({ error: "Object not found" });
+//     }
+
+//     const tableName = objRes.rows[0].object_name;
+//     const columnExists = await db.query(
+//       `SELECT column_name 
+//        FROM information_schema.columns 
+//        WHERE table_name = $1 AND LOWER(column_name) = LOWER($2)`,
+//       [tableName.toLowerCase(), column_name.toLowerCase()]
+//     );
+
+//     if (columnExists.rows.length > 0) {
+//       return res.status(400).json({
+//         error: `Column '${column_name}' already exists in actual table '${tableName}'`,
+//       });
+//     }
+                                                                                                                                                                                                                                                        
+//     const result = await db.query(
+//       `INSERT INTO columns (object_id, column_name, column_type, column_length)
+//        VALUES ($1, $2, $3, $4)
+//        RETURNING object_id, column_name, column_type, column_length`,
+//       [object_id, column_name, column_type, column_length || null]
+//     );
+
+//     let columnDef = column_type.toLowerCase();
+
+//     if (column_type.toLowerCase() === "varchar" && column_length) {
+//       columnDef += `(${column_length})`;
+//     }
+
+//     if (default_value !== undefined && default_value !== null && default_value !== "") {
+//       if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
+//         columnDef += ` DEFAULT '${default_value}'`;
+//       } else {
+//         columnDef += ` DEFAULT ${default_value}`;
+//       }
+//     }
+
+//     if (!is_null_possible) {
+//       columnDef += ` NOT NULL`;
+//     }
+//     const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
+//     await db.query(alterQuery);
+//     res.json({
+//       message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
+//       column: result.rows[0],
+//       sql: alterQuery // optional for debugging
+//     });
+
+//   } catch (err) {
+
+//     console.error("Error creating column:", err);
+//     res.status(500).json({ error: "Server error: " + err.message });
+//   }
+// };
+
+
 exports.table = async (req, res) => {
   const {
     object_id,
@@ -408,7 +504,7 @@ exports.table = async (req, res) => {
     default_value
   } = req.body;
 
-  // 1️⃣ Basic
+  // 1️⃣ Basic validation
   if (!object_id || !column_name || !column_type) {
     return res.status(400).json({
       error: "object_id, column_name, and column_type are required",
@@ -416,48 +512,74 @@ exports.table = async (req, res) => {
   }
 
   try {
-  
-    const columnMetaExists = await db.query(
-      `SELECT column_name 
-       FROM columns 
-       WHERE object_id = $1 AND LOWER(column_name) = LOWER($2)`,
-      [object_id, column_name]
-    );
-
-    if (columnMetaExists.rows.length > 0) {
-      return res.status(400).json({
-        error: `Column '${column_name}' already exists in metadata for object ID ${object_id}`,
-      });
-    }
+       // Check object exists in OBJECTS table
     const objRes = await db.query(
       `SELECT object_name FROM objects WHERE object_id = $1`,
       [object_id]
     );
 
     if (objRes.rows.length === 0) {
-      return res.status(404).json({ error: "Object not found" });
+      return res.status(404).json({
+        error: "Object ID does not exist in objects table"
+      });
     }
 
     const tableName = objRes.rows[0].object_name;
+
+       // Check actual table exists in DATABASE
+    const tableExists = await db.query(
+      `SELECT 1 
+       FROM information_schema.tables 
+       WHERE table_schema = 'public'
+       AND table_name = $1`,
+      [tableName.toLowerCase()]
+    );
+
+    if (tableExists.rows.length === 0) {
+      return res.status(404).json({
+        error: `Table '${tableName}' does not exist in database`
+      });
+    }
+
+       // Check duplicate column in METADATA (columns table)
+    const columnMetaExists = await db.query(
+      `SELECT 1
+       FROM columns
+       WHERE object_id = $1
+       AND LOWER(column_name) = LOWER($2)`,
+      [object_id, column_name]
+    );
+
+    if (columnMetaExists.rows.length > 0) {
+      return res.status(400).json({
+        error: `Column '${column_name}' already exists in metadata`
+      });
+    }
+
+      // 5️ Check duplicate column in ACTUAL TABLE
+ 
     const columnExists = await db.query(
-      `SELECT column_name 
-       FROM information_schema.columns 
-       WHERE table_name = $1 AND LOWER(column_name) = LOWER($2)`,
+      `SELECT 1
+       FROM information_schema.columns
+       WHERE table_name = $1
+       AND LOWER(column_name) = LOWER($2)`,
       [tableName.toLowerCase(), column_name.toLowerCase()]
     );
 
     if (columnExists.rows.length > 0) {
       return res.status(400).json({
-        error: `Column '${column_name}' already exists in actual table '${tableName}'`,
+        error: `Column '${column_name}' already exists in table '${tableName}'`
       });
     }
-                                                                                                                                                                                                                                                        
+
+       // Insert into METADATA table
     const result = await db.query(
       `INSERT INTO columns (object_id, column_name, column_type, column_length)
        VALUES ($1, $2, $3, $4)
-       RETURNING object_id, column_name, column_type, column_length`,
+       RETURNING *`,
       [object_id, column_name, column_type, column_length || null]
     );
+
 
     let columnDef = column_type.toLowerCase();
 
@@ -476,22 +598,31 @@ exports.table = async (req, res) => {
     if (!is_null_possible) {
       columnDef += ` NOT NULL`;
     }
-    const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
+
+   
+      //   ALTER TABLE → actual column creation
+
+    const alterQuery = `
+      ALTER TABLE "${tableName}"
+      ADD COLUMN "${column_name}" ${columnDef}
+    `;
+
     await db.query(alterQuery);
+
+  
     res.json({
-      message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
-      column: result.rows[0],
-      sql: alterQuery // optional for debugging
+      message: `Column '${column_name}' successfully added to '${tableName}'`,
+      metadata: result.rows[0],
+      sql: alterQuery.trim()
     });
 
   } catch (err) {
-
     console.error("Error creating column:", err);
-    res.status(500).json({ error: "Server error: " + err.message });
+    res.status(500).json({
+      error: "Server error: " + err.message
+    });
   }
 };
-
-
 
 
 
@@ -533,3 +664,6 @@ exports.data_type = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
