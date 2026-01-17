@@ -494,6 +494,10 @@ exports.pbjects = async (req, res) => {
 // };
 
 
+
+
+
+
 exports.table = async (req, res) => {
   const {
     object_id,
@@ -615,7 +619,6 @@ exports.table = async (req, res) => {
       metadata: result.rows[0],
       sql: alterQuery.trim()
     });
-
   } catch (err) {
     console.error("Error creating column:", err);
     res.status(500).json({
@@ -667,3 +670,84 @@ exports.data_type = async (req, res) => {
 
 
 
+exports.getUsedObjects = async (req, res) => {
+  try {
+    const result = await db.query(`
+     SELECT DISTINCT
+  o.object_id,
+  o.object_name
+FROM columns c
+JOIN objects o ON o.object_id = c.object_id
+ORDER BY o.object_id DESC;
+
+    `);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+
+
+// Get only 'object_id' from columns table
+exports.getColumnsByObjectIdOnly = async (req, res) => {
+  const object_id = req.query.object_id; // <-- query param se lena hai
+  // console.log("helloooooooooooooooooooooooooooooooooo",object_id)
+
+
+  if (!object_id) {
+    return res.status(400).json({ error: "object_id is required in query" });
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT object_id FROM columns WHERE object_id = $1`,
+      [object_id]
+    );
+console.log("heloooooooooooooooo",object_id)
+    res.status(200).json(result.rows); // sirf object_id return hoga
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Get ALL column details for a specific object_id
+exports.columnsget = async (req, res) => {
+  const { object_id } = req.query;
+
+  if (!object_id) {
+    return res.status(400).json({
+      error: "object_id is required"
+    });
+  }
+
+  try {
+    const result = await db.query(
+      `
+      SELECT *
+      FROM columns
+      WHERE object_id = $1
+      ORDER BY id
+      `,
+      [object_id]
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

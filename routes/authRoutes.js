@@ -33,7 +33,10 @@ const{
     pbjects,
     table,
     getobj,
-    data_type
+    data_type,
+    getUsedObjects,
+    getColumnsByObjectIdOnly,
+    columnsget
 
 } = require("../controllers/authController");
 
@@ -43,4 +46,13 @@ router.post("/objects",pbjects)
 router.post('/table',table)
 router.get('/objects_id',getobj)
 router.get("/data-types", data_type);
+router.get("/getUsedObjects",getUsedObjects)
+// router.get("/getColumnsById",getColumnsById)
+// Express me route
+router.get("/getColumnsByObjectIdOnly", getColumnsByObjectIdOnly);
+router.get("/columnsget", columnsget);
+
+
+
+
 module.exports = router;
