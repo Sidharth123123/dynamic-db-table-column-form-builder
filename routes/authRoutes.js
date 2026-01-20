@@ -35,8 +35,9 @@ const{
     getobj,
     data_type,
     getUsedObjects,
-    getColumnsByObjectIdOnly,
-    columnsget
+    // getColumnsByObjectIdOnly,
+    columnsget,
+    getTableDataByObjectId
 
 } = require("../controllers/authController");
 
@@ -49,8 +50,11 @@ router.get("/data-types", data_type);
 router.get("/getUsedObjects",getUsedObjects)
 // router.get("/getColumnsById",getColumnsById)
 // Express me route
-router.get("/getColumnsByObjectIdOnly", getColumnsByObjectIdOnly);
+// router.get("/getColumnsByObjectIdOnly", getColumnsByObjectIdOnly);
 router.get("/columnsget", columnsget);
+
+// router.post("/getTableDataByObjectId", getTableDataByObjectId);
+
 
 
 
