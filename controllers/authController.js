@@ -405,8 +405,8 @@ exports.table = async (req, res) => {
     column_type,
     column_length,
     default_value,
-    form_label,  // metadata only
-    not_null     // 1 = NOT NULL, 0 = allows NULL
+    form_label,  // NEW
+    not_null      // true if column can be null, false if NOT NULL
   } = req.body;
 
   // 1️⃣ Basic validation
@@ -457,58 +457,59 @@ exports.table = async (req, res) => {
       });
     }
 
-    // 5️⃣ Insert metadata into columns table
-    const result = await db.query(
-      `INSERT INTO columns (object_id, column_name, column_type, column_length, default_value, form_label, not_null)
+    // 5️⃣ Insert metadata into columns table (use not_null instead of is_null_possible)
+    insertQuery =`INSERT INTO columns (object_id, column_name, column_type, column_length, default_value, form_label, not_null)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING object_id, column_name, column_type, column_length, default_value, form_label, not_null`,
-      [
+       RETURNING object_id, column_name, column_type, column_length, default_value, form_label, not_null`;
+    const values=  [
         object_id,
         column_name,
         column_type,
         column_length || null,
         default_value || null,
         form_label || null,
-        not_null === 1 ? true : false // store as boolean in metadata
-      ]
-    );
+        not_null // store as not_null
+      ];
+    // console.log('this is object row query->',qs);
+    console.log('this is column type->',column_type);
 
-    // 6️⃣ Build column definition for ALTER TABLE
-    let columnDef = column_type.toLowerCase();
-    if (column_type.toLowerCase() === "varchar" && column_length) {
-      columnDef += `(${column_length})`;
+  
+
+var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
+// var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${column_type}(${column_length}) DEFAULT '${default_value}';`;
+
+
+  let columnDef = column_type.toLowerCase();
+  if (column_type.toLowerCase() === "character" && column_length) {
+  columnDef += `(${column_length})`; // यहाँ column_length 100 होना चाहिए
+}
+
+qs += ` ${columnDef}`; 
+
+if (not_null == 1) {
+   qs += ' NOT NULL';
+}
+if (default_value !== undefined && default_value !== null && default_value.toString().trim() != '') {
+    if (column_type.toLowerCase().includes('char') || column_type.toLowerCase() === 'text') {
+        qs += ` DEFAULT '${default_value}'`;
+    } else {
+        qs += ` DEFAULT ${default_value}`;
     }
+}
 
-    // Add default value if exists
-    if (default_value !== undefined && default_value !== null && default_value !== "") {
-      if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
-        columnDef += ` DEFAULT '${default_value}'`;
-      } else {
-        columnDef += ` DEFAULT ${default_value}`;
-      }
-    }
+ qs += ';';
 
-    // Add NOT NULL if not_null = 1
-    if (not_null === 1) {
-      columnDef += " NOT NULL";
-    }
+console.log('This is the final TABLE query --->', qs);
 
-    // 7️⃣ Alter actual table
-    const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
-    await db.query(alterQuery);
+// await db.query(qs);
+// await db.query(insertQuery,values);
 
-    res.json({
-      message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
-      column: result.rows[0],
-      sql: alterQuery
-    });
 
   } catch (err) {
     console.error("Error creating column:", err);
     res.status(500).json({ error: "Server error: " + err.message });
   }
 };
-
 
 
 
@@ -606,8 +607,59 @@ exports.table = async (req, res) => {
 //   }
 // };
 
-``
 
+    // if (default_value !== undefined && default_value !== null && default_value !== "") {
+    //   if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
+    //     columnDef += ` DEFAULT '${default_value}'`;
+    //   } else {
+    //     columnDef += ` DEFAULT ${default_value}`;
+    //   }
+    // }
+    //Add NOT NULL if not_null === true
+    // if (not_null === true) {
+    //   columnDef += " NOT NULL";
+    // }
+    // console.log(columnDef);
+    
+    // 7️⃣ Alter actual table
+    // const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
+    // await db.query(alterQuery);
+
+    // res.json({
+    //   message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
+    //   column: result.rows[0],
+    //   sql: alterQuery
+    // });
+
+//----------NK----------------------------------------------------
+
+// var qs=`ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`; 
+// if (not_null) {
+//   qs=qs + ' not null';
+// }
+// if (trim(default_value)!=''){
+//   qs=qs + ' DEFAULT '.default_value;
+// }
+// qs=qs+';';
+// console.log('this is query by neeraj--->',qs);
+// await db.query(qs);
+// ------------NKEND--------------------------------------------
+
+
+
+
+
+
+
+
+
+// if (default_value !== undefined && default_value !== null && default_value.toString().trim() !== '') {
+//   if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
+//     qs = qs + ` DEFAULT '${default_value}'`;
+//   } else {
+//     qs = qs + ` DEFAULT ${default_value}`;
+//   }
+// }
 
 
 
