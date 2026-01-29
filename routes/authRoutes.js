@@ -37,7 +37,11 @@ const{
     getUsedObjects,
     // getColumnsByObjectIdOnly,
     columnsget,
-    getTableDataByObjectId
+getTableDataByObjectId,
+getDataByObjectId,
+updateDataById,
+deleteDataById
+
 
 } = require("../controllers/authController");
 
@@ -53,7 +57,13 @@ router.get("/getUsedObjects",getUsedObjects)
 // router.get("/getColumnsByObjectIdOnly", getColumnsByObjectIdOnly);
 router.get("/columnsget", columnsget);
 
-// router.post("/getTableDataByObjectId", getTableDataByObjectId);
+router.post("/getTableDataByObjectId", getTableDataByObjectId);
+
+router.get("/getDataByObjectId",getDataByObjectId)
+
+router.put("/updateDataById", updateDataById);
+
+router.delete("/deleteDataById", deleteDataById);
 
 
 

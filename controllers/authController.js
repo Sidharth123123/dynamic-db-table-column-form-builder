@@ -8,7 +8,7 @@
 const jwt = require("jsonwebtoken");
 const Users = require("../models/Users");
 const db = require('../db');  // अगर db.js project root में है
-const pool = require("../db"); 
+const pool = require("../db");
 
 exports.login = async (req, res) => {
   const { name, password } = req.body;
@@ -416,103 +416,190 @@ exports.table = async (req, res) => {
     });
   }
 
-  try {
-    // 2️⃣ Check duplicate in metadata
-    const columnMetaExists = await db.query(
-      `SELECT column_name 
+  // try {
+  // 2️⃣ Check duplicate in metadata
+  const columnMetaExists = await db.query(
+    `SELECT column_name 
        FROM columns 
        WHERE object_id = $1 AND LOWER(column_name) = LOWER($2)`,
-      [object_id, column_name]
-    );
+    [object_id, column_name]
+  );
 
-    if (columnMetaExists.rows.length > 0) {
-      return res.status(400).json({
-        error: `Column '${column_name}' already exists in metadata for object ID ${object_id}`,
-      });
-    }
+  if (columnMetaExists.rows.length > 0) {
+    return res.status(400).json({
+      error: `Column '${column_name}' already exists in metadata for object ID ${object_id}`,
+    });
+  }
 
-    // 3️⃣ Get table name
-    const objRes = await db.query(
-      `SELECT object_name FROM objects WHERE object_id = $1`,
-      [object_id]
-    );
+  // 3️⃣ Get table name
+  const objRes = await db.query(
+    `SELECT object_name FROM objects WHERE object_id = $1`,
+    [object_id]
+  );
 
-    if (objRes.rows.length === 0) {
-      return res.status(404).json({ error: "Object not found" });
-    }
+  if (objRes.rows.length === 0) {
+    return res.status(404).json({ error: "Object not found" });
+  }
 
-    const tableName = objRes.rows[0].object_name;
+  const tableName = objRes.rows[0].object_name;
 
-    // 4️⃣ Check duplicate in actual table
-    const columnExists = await db.query(
-      `SELECT column_name 
+  // 4️⃣ Check duplicate in actual table
+  const columnExists = await db.query(
+    `SELECT column_name 
        FROM information_schema.columns 
        WHERE table_name = $1 AND LOWER(column_name) = LOWER($2)`,
-      [tableName.toLowerCase(), column_name.toLowerCase()]
-    );
+    [tableName.toLowerCase(), column_name.toLowerCase()]
+  );
 
-    if (columnExists.rows.length > 0) {
-      return res.status(400).json({
-        error: `Column '${column_name}' already exists in actual table '${tableName}'`,
-      });
-    }
+  if (columnExists.rows.length > 0) {
+    return res.status(400).json({
+      error: `Column '${column_name}' already exists in actual table '${tableName}'`,
+    });
+  }
 
-    // 5️⃣ Insert metadata into columns table (use not_null instead of is_null_possible)
-    insertQuery =`INSERT INTO columns (object_id, column_name, column_type, column_length, default_value, form_label, not_null)
+  // 5️⃣ Insert metadata into columns table (use not_null instead of is_null_possible)
+  insertQuery = `INSERT INTO columns (object_id, column_name, column_type, column_length, default_value, form_label, not_null)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING object_id, column_name, column_type, column_length, default_value, form_label, not_null`;
-    const values=  [
-        object_id,
-        column_name,
-        column_type,
-        column_length || null,
-        default_value || null,
-        form_label || null,
-        not_null // store as not_null
-      ];
-    // console.log('this is object row query->',qs);
-    console.log('this is column type->',column_type);
+  const values = [
+    object_id,
+    column_name,
+    column_type,
+    column_length || null,
+    default_value || null,
+    form_label || null,
+    not_null // store as not_null
+  ];
+  // console.log('this is object row query->',qs);
+  console.log('this is column type->', column_type);
 
-  
 
-var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
-// var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${column_type}(${column_length}) DEFAULT '${default_value}';`;
+
+  var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
+  // var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${column_type}(${column_length}) DEFAULT '${default_value}';`;
 
 
   let columnDef = column_type.toLowerCase();
   if (column_type.toLowerCase() === "character" && column_length) {
-  columnDef += `(${column_length})`; // यहाँ column_length 100 होना चाहिए
-}
+    columnDef += `(${column_length})`; // यहाँ column_length 100 होना चाहिए
+  }
 
-qs += ` ${columnDef}`; 
+  qs += ` ${columnDef}`;
 
-if (not_null == 1) {
-   qs += ' NOT NULL';
-}
-if (default_value !== undefined && default_value !== null && default_value.toString().trim() != '') {
+  if (not_null == 1) {
+    qs += ' NOT NULL';
+  }
+  if (default_value !== undefined && default_value !== null && default_value.toString().trim() != '') {
     if (column_type.toLowerCase().includes('char') || column_type.toLowerCase() === 'text') {
-        qs += ` DEFAULT '${default_value}'`;
+      qs += ` DEFAULT '${default_value}'`;
     } else {
-        qs += ` DEFAULT ${default_value}`;
+      qs += ` DEFAULT ${default_value}`;
     }
-}
+  }
 
- qs += ';';
+  qs += ';';
 
-console.log('This is the final TABLE query --->', qs);
+  // console.log('This is the final TABLE query --->', qs);
+  // console.log('This is the final TABLE query --->',insertQuery,values);
 
-// await db.query(qs);
-// await db.query(insertQuery,values);
 
+
+  // await db.query(qs);
+  // await db.query(insertQuery,values);
+  const client = await db.connect();
+
+  try {
+
+    await client.query("BEGIN");
+
+    console.log('Running ALTER TABLE --->', qs);
+    await db.query(qs);
+
+    console.log('Running INSERT --->', insertQuery, values);
+    await db.query(insertQuery, values);
+
+    await db.query("COMMIT");
+
+    res.json({ message: "Column created successfully" });
 
   } catch (err) {
+
+    await db.query("ROLLBACK");  // rollback correctly
+
     console.error("Error creating column:", err);
     res.status(500).json({ error: "Server error: " + err.message });
+
+  } finally {
+
+    client.release();  // important: release connection back to pool
+
   }
-};
+}
 
 
 
+
+
+
+
+
+
+// const db = await db.connect();
+
+// try {
+//   await db.query("BEGIN");
+
+//   // 1️⃣ ALTER TABLE
+//   try {
+//     await db.query(qs);
+//     console.log("ALTER TABLE executed successfully");
+//   } catch (err) {
+//     console.error("Error in ALTER TABLE query:", err.message);
+//     throw new Error("ALTER TABLE failed: " + err.message);
+//   }
+
+//   // 2️⃣ INSERT metadata
+//   try {
+//     await db.query(insertQuery, values);
+//     console.log("INSERT executed successfully");
+//   } catch (err) {
+//     console.error("Error in INSERT query:", err.message);
+//     throw new Error("INSERT query failed: " + err.message);
+//   }
+
+//   await db.query("COMMIT");
+//   console.log("Transaction committed successfully");
+//   res.json({ message: "Column created successfully" });
+
+// } catch (err) {
+//   await db.query("ROLLBACK");
+//   console.error("Transaction rolled back. Query error:", err.message);
+//   res.status(500).json({ error: err.message });
+// } finally {
+//   db.release();
+// }
+
+
+
+
+
+
+
+
+
+
+// try{
+//   await db.beginTransaction();
+//     await db.query(qs);
+//     await db.query(insertQuery,values);
+
+//     await db.commit();  
+
+//   } catch (err) {
+//     await db.rollback();
+//     console.error("Error creating column:", err);
+//     res.status(500).json({ error: "Server error: " + err.message });
+//   }
 
 // exports.table = async (req, res) => {
 //   const {
@@ -520,7 +607,7 @@ console.log('This is the final TABLE query --->', qs);
 //     column_name,
 //     column_type,
 //     column_length,
- 
+
 //     form_label
 //   } = req.body;
 
@@ -586,10 +673,10 @@ console.log('This is the final TABLE query --->', qs);
 //       columnDef += `(${column_length})`;
 //     }
 
-   
+
 
 //     // Optional NOT NULL if is_null_possible = false
-  
+
 
 //     // 7️⃣ ALTER TABLE → actual column creation
 //     const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
@@ -608,28 +695,28 @@ console.log('This is the final TABLE query --->', qs);
 // };
 
 
-    // if (default_value !== undefined && default_value !== null && default_value !== "") {
-    //   if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
-    //     columnDef += ` DEFAULT '${default_value}'`;
-    //   } else {
-    //     columnDef += ` DEFAULT ${default_value}`;
-    //   }
-    // }
-    //Add NOT NULL if not_null === true
-    // if (not_null === true) {
-    //   columnDef += " NOT NULL";
-    // }
-    // console.log(columnDef);
-    
-    // 7️⃣ Alter actual table
-    // const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
-    // await db.query(alterQuery);
+// if (default_value !== undefined && default_value !== null && default_value !== "") {
+//   if (["varchar", "character", "text"].includes(column_type.toLowerCase())) {
+//     columnDef += ` DEFAULT '${default_value}'`;
+//   } else {
+//     columnDef += ` DEFAULT ${default_value}`;
+//   }
+// }
+//Add NOT NULL if not_null === true
+// if (not_null === true) {
+//   columnDef += " NOT NULL";
+// }
+// console.log(columnDef);
 
-    // res.json({
-    //   message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
-    //   column: result.rows[0],
-    //   sql: alterQuery
-    // });
+// 7️⃣ Alter actual table
+// const alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${columnDef}`;
+// await db.query(alterQuery);
+
+// res.json({
+//   message: `Column '${column_name}' added to metadata and table '${tableName}' successfully`,
+//   column: result.rows[0],
+//   sql: alterQuery
+// });
 
 //----------NK----------------------------------------------------
 
@@ -740,7 +827,7 @@ exports.getColumnsByObjectIdOnly = async (req, res) => {
       `SELECT object_id FROM columns WHERE object_id = $1`,
       [object_id]
     );
-console.log("heloooooooooooooooo",object_id)
+    console.log("heloooooooooooooooo", object_id)
     res.status(200).json(result.rows); // sirf object_id return hoga
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -831,5 +918,348 @@ exports.columnsget = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+
+
+
+
+
+
+
+
+exports.getTableDataByObjectId = async (req, res) => {
+  const { object_id, data } = req.body;
+
+  if (!object_id || !data) {
+    return res.status(400).json({ error: "object_id and data are required" });
+  }
+
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1️⃣ Get table name
+    const tableResult = await client.query(
+      "SELECT object_name FROM objects WHERE object_id = $1",
+      [object_id]
+    );
+
+    if (tableResult.rows.length === 0) {
+      throw new Error("Invalid object_id");
+    }
+
+    const tableName = tableResult.rows[0].object_name;
+
+    // 2️⃣ Get valid columns
+    const columnsResult = await client.query(
+      "SELECT column_name FROM columns WHERE object_id = $1",
+      [object_id]
+    );
+
+    const validColumns = columnsResult.rows.map(row => row.column_name);
+
+
+    if (validColumns.length === 0) {
+      throw new Error("No columns found for this table");
+    }
+
+    const dataColumns = Object.keys(data);
+
+    const extraFields = dataColumns.filter(col => !validColumns.includes(col));
+    if (extraFields.length > 0) {
+      throw new Error(
+        `Invalid fields provided: ${extraFields.join(", ")}. Only these are allowed: ${validColumns.join(", ")}`
+      )
+    };
+
+
+    const columnNames = validColumns;
+    const values = columnNames.map(col => data[col] || null);
+
+    const placeholders = columnNames.map((_, i) => `$${i + 1}`);
+
+    const insertQuery = `
+          INSERT INTO ${tableName} (${columnNames.join(", ")})
+      VALUES (${placeholders.join(", ")})
+      RETURNING *;
+    `;
+   
+
+    const result = await client.query(insertQuery, values);
+
+
+
+    await client.query("COMMIT");
+
+
+
+     console.log("Insert Query:", insertQuery);
+    console.log("Values to Insert:", values);
+
+    //  Response
+    res.status(201).json({
+      message: "Data inserted successfully",
+      object_id: object_id,
+      table_name: tableName,
+      inserted_data: result.rows[0]
+    })
+
+  }    catch (err) {
+  await client.query("ROLLBACK");
+  console.error("Insert Error:", err.message);
+  res.status(400).json({ error: err.message });
+} finally {
+  client.release();
+}}
+
+
+
+
+
+
+
+
+// exports.getDataByObjectId = async (req, res) => {
+//   const { object_id } = req.query;
+
+//   if (!object_id) {
+//     return res.status(400).json({ error: "object_id is required" });
+//   }
+
+//   const client = await db.connect();
+
+//   try {
+//     // 1️⃣ Get table name
+//     const tableResult = await client.query(
+//       "SELECT object_name FROM objects WHERE object_id = $1",
+//       [object_id]
+//     );
+
+//     if (tableResult.rows.length === 0) {
+//       throw new Error("Invalid object_id");
+//     }
+
+//     const tableName = tableResult.rows[0].object_name;
+//     console.log("Fetching data from table:", tableName);
+
+//     // 2️⃣ Fetch all data from that table
+//     const selectQuery = `SELECT * FROM ${tableName} ORDER BY id DESC;`;
+
+//     console.log("Select Query:", selectQuery);
+
+//     const result = await client.query(selectQuery);
+
+//     // 3️⃣ Response
+//     res.status(200).json({
+//       message: "Data fetched successfully",
+//       object_id: object_id,
+//       table_name: tableName,
+//       total_records: result.rows.length,
+//       data: result.rows
+//     });
+
+//   } catch (err) {
+//     console.error("Fetch Error:", err.message);
+//     res.status(400).json({ error: err.message });
+//   } finally {
+//     client.release();
+//   }
+// };
+
+
+exports.getDataByObjectId = async (req, res) => {
+  const { object_id } = req.query;
+
+  if (!object_id) {
+    return res.status(400).json({ error: "object_id is required" });
+  }
+
+  const client = await db.connect();
+
+  try {
+    // 1️⃣ Get table name
+    const tableResult = await client.query(
+      "SELECT object_name FROM objects WHERE object_id = $1",
+      [object_id]
+    );
+
+    if (tableResult.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid object_id" });
+    }
+
+    const tableName = tableResult.rows[0].object_name;
+
+    // 🔐 Security check
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      throw new Error("Invalid table name");
+    }
+
+    // 2️⃣ Fetch table data
+    const result = await client.query(
+      `SELECT * FROM ${tableName} ORDER BY id DESC`
+    );
+
+    // ✅ If NO records → Fetch columns
+    if (result.rows.length === 0) {
+
+      const columnResult = await client.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_name = $1
+         ORDER BY ordinal_position`,
+        [tableName]
+      );
+
+      return res.status(200).json({
+        message: "No records found. Columns fetched successfully.",
+        object_id,
+        table_name: tableName,
+        total_records: 0,
+        columns: columnResult.rows.map(col => col.column_name),
+        data: []
+      });
+    }
+
+    // ✅ If records exist
+    return res.status(200).json({
+      message: "Data fetched successfully",
+      object_id,
+      table_name: tableName,
+      total_records: result.rows.length,
+      columns: Object.keys(result.rows[0]),
+      data: result.rows
+    });
+
+  } catch (err) {
+    console.error("Error:", err.message);
+    return res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+
+
+exports.updateDataById = async (req, res) => {
+  const { object_id, id, data } = req.body;
+
+  if (!object_id || !id || !data) {
+    return res.status(400).json({ error: "object_id, id, and data are required" });
+  }
+
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1️⃣ Get table name
+    const tableResult = await client.query(
+      "SELECT object_name FROM objects WHERE object_id = $1",
+      [object_id]
+    );
+
+    if (tableResult.rows.length === 0) {
+      throw new Error("Invalid object_id");
+    }
+
+    const tableName = tableResult.rows[0].object_name;
+
+    // 2️⃣ Get valid columns
+    const columnsResult = await client.query(
+      "SELECT column_name FROM columns WHERE object_id = $1",
+      [object_id]
+    );
+
+    const validColumns = columnsResult.rows.map(row => row.column_name);
+
+    if (validColumns.length === 0) {
+      throw new Error("No columns found for this table");
+    }
+
+    // 3️⃣ Filter data only for valid columns
+    const filteredData = {};
+    validColumns.forEach(col => {
+      if (data[col] !== undefined) filteredData[col] = data[col];
+    });
+
+    const columnNames = Object.keys(filteredData);
+    const values = Object.values(filteredData);
+
+    if (columnNames.length === 0) {
+      throw new Error("No valid data provided to update");
+    }
+
+    const setString = columnNames.map((col, i) => `${col}=$${i + 1}`).join(", ");
+
+    const query = `UPDATE ${tableName} SET ${setString} WHERE id=$${columnNames.length + 1} RETURNING *;`;
+
+    const result = await client.query(query, [...values, id]);
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      message: "Row updated successfully",
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Update Error:", err.message);
+    res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+
+
+exports.deleteDataById = async (req, res) => {
+  const { object_id, id } = req.body;
+
+  if (!object_id || !id) {
+    return res.status(400).json({ error: "object_id and id are required" });
+  }
+
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1️⃣ Get table name
+    const tableResult = await client.query(
+      "SELECT object_name FROM objects WHERE object_id = $1",
+      [object_id]
+    );
+
+    if (tableResult.rows.length === 0) {
+      throw new Error("Invalid object_id");
+    }
+
+    const tableName = tableResult.rows[0].object_name;
+
+    // 2️⃣ Delete row
+    const deleteQuery = `DELETE FROM ${tableName} WHERE id=$1 RETURNING *;`;
+    const result = await client.query(deleteQuery, [id]);
+
+    if (result.rows.length === 0) {
+      throw new Error("Row not found or already deleted");
+    }
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      message: "Row deleted successfully",
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Delete Error:", err.message);
+    res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
