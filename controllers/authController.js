@@ -405,7 +405,7 @@ exports.table = async (req, res) => {
     column_type,
     column_length,
     default_value,
-    form_label,  // NEW
+    form_label,  // 
     not_null      // true if column can be null, false if NOT NULL
   } = req.body;
 
@@ -468,44 +468,104 @@ exports.table = async (req, res) => {
     column_length || null,
     default_value || null,
     form_label || null,
-    not_null // store as not_null
+  not_null ? 1 : 0  // <-- ensure 1 or 0
   ];
   // console.log('this is object row query->',qs);
   console.log('this is column type->', column_type);
 
 
 
-  var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
-  // var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${column_type}(${column_length}) DEFAULT '${default_value}';`;
+//   var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
+//   // var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}" ${column_type}(${column_length}) DEFAULT '${default_value}';`;
 
 
-  let columnDef = column_type.toLowerCase();
-  if (column_type.toLowerCase() === "character" && column_length) {
-    columnDef += `(${column_length})`; // यहाँ column_length 100 होना चाहिए
+//   let columnDef = column_type.toLowerCase();
+
+//   if (column_type.toLowerCase() === "character" && column_length) {
+//     columnDef += `(${column_length})`; 
+//   }
+//   qs += ` ${columnDef}`;
+
+//   if (not_null == 1) {
+//     qs += ' NOT NULL';
+//   }
+
+// //   if (not_null === true || not_null === 1) {
+// //   qs += ' NOT NULL';
+// // }
+
+//   if (default_value !== undefined && default_value !== null && default_value.toString().trim() != '') {
+//     if (column_type.toLowerCase().includes('char') || column_type.toLowerCase() === 'text') {
+//       qs += ` DEFAULT '${default_value}'`;
+//     } else {
+//       qs += ` DEFAULT ${default_value}`;
+//     }
+//   }
+
+//   qs += ';';
+
+
+
+
+
+
+
+
+
+
+var qs = `ALTER TABLE "${tableName}" ADD COLUMN "${column_name}"`;
+
+let columnDef = column_type.toLowerCase();
+
+// character length handle
+if (column_type.toLowerCase() === "character" && column_length) {
+  columnDef += `(${column_length})`;
+}
+
+qs += ` ${columnDef}`;
+
+const isNotNull =
+  not_null === true ||
+  not_null === 1 ||
+  not_null === "true";
+
+// Add NOT NULL
+if (isNotNull) {
+  qs += " NOT NULL";
+}
+
+// Default value
+if (
+  default_value !== undefined &&
+  default_value !== null &&
+  default_value.toString().trim() !== ""
+) {
+  if (
+    column_type.toLowerCase().includes("char") ||
+    column_type.toLowerCase() === "text"
+  ) {
+    qs += ` DEFAULT '${default_value}'`;
+  } else {
+    qs += ` DEFAULT ${default_value}`;
   }
+}
 
-  qs += ` ${columnDef}`;
+qs += ";";
 
-  if (not_null == 1) {
-    qs += ' NOT NULL';
-  }
-  if (default_value !== undefined && default_value !== null && default_value.toString().trim() != '') {
-    if (column_type.toLowerCase().includes('char') || column_type.toLowerCase() === 'text') {
-      qs += ` DEFAULT '${default_value}'`;
-    } else {
-      qs += ` DEFAULT ${default_value}`;
-    }
-  }
+// console.log("FINAL QUERY:", qs);
 
-  qs += ';';
+
+
 
   // console.log('This is the final TABLE query --->', qs);
   // console.log('This is the final TABLE query --->',insertQuery,values);
 
 
+// console.log("NOT NULL VALUE --->", not_null);
+// console.log("FINAL QUERY --->", qs);
 
   // await db.query(qs);
-  // await db.query(insertQuery,values);
+  // await db.query(insertQuery,values);t
   const client = await db.connect();
 
   try {
@@ -515,7 +575,7 @@ exports.table = async (req, res) => {
     console.log('Running ALTER TABLE --->', qs);
     await db.query(qs);
 
-    console.log('Running INSERT --->', insertQuery, values);
+    // console.log('Running INSERT --->', insertQuery, values);
     await db.query(insertQuery, values);
 
     await db.query("COMMIT");
@@ -523,11 +583,16 @@ exports.table = async (req, res) => {
     res.json({ message: "Column created successfully" });
 
   } catch (err) {
-
+  
     await db.query("ROLLBACK");  // rollback correctly
 
     console.error("Error creating column:", err);
     res.status(500).json({ error: "Server error: " + err.message });
+
+// res.status(500).json({
+//   error: err.message || "Unknown server error"
+// });
+
 
   } finally {
 
@@ -536,6 +601,8 @@ exports.table = async (req, res) => {
   }
 }
 
+
+ 
 
 
 
@@ -773,6 +840,9 @@ exports.getobj = async (req, res) => {
 
 
 
+                                                                                         
+
+
 
 exports.data_type = async (req, res) => {
   try {
@@ -792,6 +862,27 @@ exports.data_type = async (req, res) => {
 
 
 exports.getUsedObjects = async (req, res) => {
+  try {
+    const result = await db.query(`
+     SELECT DISTINCT
+  o.object_id,
+  o.object_name
+FROM columns c
+JOIN objects o ON o.object_id = c.object_id
+ORDER BY o.object_id DESC;
+
+    `);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+
+
+exports.getUsedObjects1 = async (req, res) => {
   try {
     const result = await db.query(`
      SELECT DISTINCT
@@ -1143,9 +1234,79 @@ exports.getDataByObjectId = async (req, res) => {
 
 
 
+// exports.updateDataById = async (req, res) => {
+//   const { object_id, id, data } = req.body;
+
+//   if (!object_id || !id || !data) {
+//     return res.status(400).json({ error: "object_id, id, and data are required" });
+//   }
+
+//   const client = await db.connect();
+
+//   try {
+//     await client.query("BEGIN");
+
+//     // 1️⃣ Get table name
+//     const tableResult = await client.query(
+//       "SELECT object_name FROM objects WHERE object_id = $1",
+//       [object_id]
+//     );
+
+//     if (tableResult.rows.length === 0) {
+//       throw new Error("Invalid object_id");
+//     }
+
+//     const tableName = tableResult.rows[0].object_name;
+
+//     // 2️⃣ Get valid columns
+//     const columnsResult = await client.query(
+//       "SELECT column_name FROM columns WHERE object_id = $1",
+//       [object_id]
+//     );
+
+//     const validColumns = columnsResult.rows.map(row => row.column_name);
+
+//     if (validColumns.length === 0) {
+//       throw new Error("No columns found for this table");
+//     }
+
+//     // 3️⃣ Filter data only for valid columns
+//     const filteredData = {};
+//     validColumns.forEach(col => {
+//       if (data[col] !== undefined) filteredData[col] = data[col];
+//     });
+
+//     const columnNames = Object.keys(filteredData);
+//     const values = Object.values(filteredData);
+
+//     if (columnNames.length === 0) {
+//       throw new Error("No valid data provided to update");
+//     }
+
+//     const setString = columnNames.map((col, i) => `${col}=$${i + 1}`).join(", ");
+
+//     const query = `UPDATE ${tableName} SET ${setString} WHERE id=$${columnNames.length + 1} RETURNING *;`;
+
+//     const result = await client.query(query, [...values, id]);
+
+//     await client.query("COMMIT");
+
+//     res.status(200).json({
+//       message: "Row updated successfully",
+//       data: result.rows[0]
+//     });
+
+//   } catch (err) {
+//     await client.query("ROLLBACK");
+//     console.error("Update Error:", err.message);
+//     res.status(400).json({ error: err.message });
+//   } finally {
+//     client.release();
+//   }
+// };
+
 exports.updateDataById = async (req, res) => {
   const { object_id, id, data } = req.body;
-
   if (!object_id || !id || !data) {
     return res.status(400).json({ error: "object_id, id, and data are required" });
   }
@@ -1155,19 +1316,14 @@ exports.updateDataById = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // 1️⃣ Get table name
     const tableResult = await client.query(
       "SELECT object_name FROM objects WHERE object_id = $1",
       [object_id]
     );
-
-    if (tableResult.rows.length === 0) {
-      throw new Error("Invalid object_id");
-    }
+    if (tableResult.rows.length === 0) throw new Error("Invalid object_id");
 
     const tableName = tableResult.rows[0].object_name;
 
-    // 2️⃣ Get valid columns
     const columnsResult = await client.query(
       "SELECT column_name FROM columns WHERE object_id = $1",
       [object_id]
@@ -1175,35 +1331,24 @@ exports.updateDataById = async (req, res) => {
 
     const validColumns = columnsResult.rows.map(row => row.column_name);
 
-    if (validColumns.length === 0) {
-      throw new Error("No columns found for this table");
-    }
-
-    // 3️⃣ Filter data only for valid columns
     const filteredData = {};
     validColumns.forEach(col => {
-      if (data[col] !== undefined) filteredData[col] = data[col];
+      if (data[col] !== undefined && data[col] !== null) filteredData[col] = data[col]; // safe filter
     });
 
-    const columnNames = Object.keys(filteredData);
-    const values = Object.values(filteredData);
-
-    if (columnNames.length === 0) {
+    if (Object.keys(filteredData).length === 0) {
       throw new Error("No valid data provided to update");
     }
 
+    const columnNames = Object.keys(filteredData);
+    const values = Object.values(filteredData);
     const setString = columnNames.map((col, i) => `${col}=$${i + 1}`).join(", ");
 
     const query = `UPDATE ${tableName} SET ${setString} WHERE id=$${columnNames.length + 1} RETURNING *;`;
-
     const result = await client.query(query, [...values, id]);
 
     await client.query("COMMIT");
-
-    res.status(200).json({
-      message: "Row updated successfully",
-      data: result.rows[0]
-    });
+    res.status(200).json({ message: "Row updated successfully", data: result.rows[0] });
 
   } catch (err) {
     await client.query("ROLLBACK");
@@ -1213,6 +1358,7 @@ exports.updateDataById = async (req, res) => {
     client.release();
   }
 };
+
 
 
 
@@ -1263,3 +1409,55 @@ exports.deleteDataById = async (req, res) => {
     client.release();
   }
 };
+
+
+
+
+
+
+
+exports.getColumnsByObjectId = async (req, res) => {
+  try {
+    // Get object_id from query params
+    const objectId = req.query.object_id;
+
+    if (!objectId) {
+      return res.status(400).json({ error: "objectId is required" });
+    }
+
+    // Query the database for columns of that object
+    const query = `
+      SELECT *
+      FROM columns      -- replace 'columns' with your actual table name
+      WHERE object_id = $1
+    `;
+    const { rows } = await pool.query(query, [objectId]);
+
+    res.json(rows); // send all columns for this object
+  } catch (error) {
+    console.error("Error fetching columns:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+

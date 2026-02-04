@@ -35,13 +35,16 @@ const{
     getobj,
     data_type,
     getUsedObjects,
+        getUsedObjects1,
+
+
     // getColumnsByObjectIdOnly,
     columnsget,
 getTableDataByObjectId,
 getDataByObjectId,
 updateDataById,
-deleteDataById
-
+deleteDataById,
+getColumnsByObjectId
 
 } = require("../controllers/authController");
 
@@ -52,6 +55,11 @@ router.post('/table',table)
 router.get('/objects_id',getobj)
 router.get("/data-types", data_type);
 router.get("/getUsedObjects",getUsedObjects)
+
+router.get("/getUsedObjects1",getUsedObjects1)
+router.get("/objectdataincreatetable", getColumnsByObjectId);
+
+
 // router.get("/getColumnsById",getColumnsById)
 // Express me route
 // router.get("/getColumnsByObjectIdOnly", getColumnsByObjectIdOnly);
@@ -70,3 +78,12 @@ router.delete("/deleteDataById", deleteDataById);
 
 
 module.exports = router;
+
+
+
+
+
+
+
+
+
